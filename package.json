@@ -5,6 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint src --ext .js,.ts --cache",
+    "lint:fix": "eslint src --ext .js,.ts --fix --cache",
+    "prettier": "prettier --check \"src/**/*.{js,ts,json}\"",
+    "prettier:fix": "prettier --write \"src/**/*.{js,ts,json}\"",
     "prepare": "husky"
   },
   "lint-staged": {

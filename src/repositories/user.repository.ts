@@ -13,6 +13,14 @@ class UserRepository {
   findByEmail(email: string) {
     return UserModel.findOne({ email })
   }
+
+  //   findById(id: string)
+  // findByEmail(email: string)
+  // create(data)
+  // updateById(id, data)
+  // increaseFailedAttempts(userId: string)
+  // resetLoginAttempts(userId: string)
+  // lockAccount(userId: string, until: Date)
 }
 
 export default new UserRepository()

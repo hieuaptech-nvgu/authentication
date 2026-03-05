@@ -14,6 +14,12 @@ class UserRepository {
     return UserModel.findOne({ email })
   }
 
+  findByEmailOrUsername(email: string, username: string) {
+    return UserModel.findOne({
+      $or: [{ email }, { username }],
+    })
+  }
+
   //   findById(id: string)
   // findByEmail(email: string)
   // create(data)

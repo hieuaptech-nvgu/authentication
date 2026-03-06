@@ -1,5 +1,6 @@
 import type { RegisterDTO, LoginDTO } from '../dto/auth.dto.js'
 import userRepository from '~/repositories/user.repository.js'
+import refreshtokenRepository from '~/repositories/refreshtoken.repository.js'
 import HashUtils from '../utils/hash.js'
 import Jwt from '~/utils/jwt.js'
 
@@ -32,13 +33,27 @@ class AuthService {
       throw new Error('Wrong username or password')
     }
 
-    const accessToken = await Jwt.createAccessToken({ userId: userMatch._id.toString(), email: userMatch.email })
-    const refreshToken = await Jwt.createRefreshToken({ userId: userMatch._id.toString(), email: userMatch.email })
+    const accessToken = Jwt.createAccessToken({ userId: userMatch._id.toString(), email: userMatch.email })
+    const refreshToken = Jwt.createRefreshToken({ userId: userMatch._id.toString(), email: userMatch.email })
+
+    await refreshtokenRepository.deleteByUserId(userMatch._id)
+
+    await refreshtokenRepository.create({
+      userId: userMatch._id,
+      token: refreshToken,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    })
 
     return {
+      userMatch,
       accessToken,
       refreshToken,
     }
+  }
+
+  async logout(refreshToken: string){
+    await refreshtokenRepository.deleteRefreshToken(refreshToken)
+    return true
   }
 }
 

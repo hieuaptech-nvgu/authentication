@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken'
+import dotenv from 'dotenv'
+dotenv.config()
 import type { JwtPayload } from '../types/payload.type.js'
 
 const ACCESS_KEY = process.env.SECRET_ACCESS_KEY as string

@@ -43,6 +43,22 @@ class AuthController {
       next(error)
     }
   }
+
+  async refreshToken(req: Request, res: Response, next: NextFunction) {
+    try {
+      const token = req.cookies?.refreshtoken
+      if (!token) {
+        return res.status(401).json({ message: 'Token not found' })
+      }
+      const accessToken = await AuthService.refreshToken(token)
+      res.status(200).json({
+        message: 'Token refreshed',
+        accessToken,
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
 }
 
 export default new AuthController()

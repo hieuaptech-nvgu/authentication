@@ -51,9 +51,38 @@ class AuthService {
     }
   }
 
-  async logout(refreshToken: string){
+  async logout(refreshToken: string) {
     await refreshtokenRepository.deleteRefreshToken(refreshToken)
     return true
+  }
+
+  async refreshToken(token: string) {
+    let payload
+    try {
+      payload = Jwt.verifyRefreshToken(token)
+    } catch {
+      throw new Error(`Invalid or expired refresh token`)
+    }
+
+    const session = await refreshtokenRepository.findByToken(token)
+
+    if (!session) {
+      throw new Error('Invalid or expired refresh token')
+    }
+
+    if (payload.userId !== session.userId.toString()) {
+      throw new Error('Invalid refresh token')
+    }
+
+    if (session.expiresAt < new Date()) {
+      throw new Error('token has expired')
+    }
+
+    const newAccessToken = Jwt.createAccessToken({ userId: session.userId.toString() })
+
+    return {
+      accessToken: newAccessToken,
+    }
   }
 }
 

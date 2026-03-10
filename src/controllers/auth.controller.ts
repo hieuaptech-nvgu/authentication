@@ -1,18 +1,30 @@
 import type { Request, Response, NextFunction } from 'express'
 import type { LoginDTO, RegisterDTO } from '~/dto/auth.dto.js'
 import AuthService from '~/services/auth.service.js'
+import EmailService from '~/services/email.service.js'
 
 class AuthController {
+  async verifyEmail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email, code } = req.body
+
+      const result = await EmailService.verifyEmail(email, code)
+
+      return res.status(200).json(result)
+    } catch (error) {
+      next(error)
+    }
+  }
   async login(req: Request, res: Response, next: NextFunction) {
     try {
-      const { userMatch, accessToken, refreshToken } = await AuthService.login(req.body as LoginDTO)
+      const { accessToken, refreshToken } = await AuthService.login(req.body as LoginDTO)
       res.cookie('refreshtoken', refreshToken, {
         httpOnly: true,
         secure: true,
         sameSite: 'none',
         maxAge: 7 * 24 * 60 * 60 * 1000,
       })
-      res.status(200).json({ message: `User ${userMatch.username} is logged in`, accessToken })
+      res.status(200).json({ message: `User is logged in`, accessToken })
     } catch (error) {
       next(error)
     }

@@ -20,6 +20,10 @@ class UserRepository {
     })
   }
 
+  update(userId: string, data: Partial<any>) {
+    return UserModel.findByIdAndUpdate(userId, data, { new: true })
+  }
+
   //   findById(id: string)
   // findByEmail(email: string)
   // create(data)

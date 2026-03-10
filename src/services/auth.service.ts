@@ -3,38 +3,66 @@ import userRepository from '~/repositories/user.repository.js'
 import refreshtokenRepository from '~/repositories/refreshtoken.repository.js'
 import HashUtils from '../utils/hash.js'
 import Jwt from '~/utils/jwt.js'
+import { generateOtp } from '~/utils/generateOTP.js'
+import EmailService from './email.service.js'
 
 class AuthService {
   async register(data: RegisterDTO) {
     const { username, email, password } = data
+
     const existsUser = await userRepository.findByEmailOrUsername(username, email)
     if (existsUser) {
       throw new Error('User already exists')
     }
+
+    const otp = generateOtp()
+    const hashedOtp = await HashUtils.hashPassword(otp)
+
     const hashedPassword = await HashUtils.hashPassword(password)
 
     const newUser = await userRepository.create({
-      email,
       username,
+      email,
       hashedPassword,
+      is_verified: false,
+      email_verify_code: hashedOtp,
+      email_verify_expires: new Date(Date.now() + 10 * 60 * 1000),
     })
 
-    return newUser
+    await EmailService.sendVerifyEmail(email, otp)
+    console.log("this is otp", otp)
+
+    return {
+      id: newUser._id,
+      email: newUser.email,
+      username: newUser.username,
+    }
   }
 
   async login(data: LoginDTO) {
     const { email, password } = data
+
     const userMatch = await userRepository.findByEmail(email)
     if (!userMatch) {
       throw new Error('Wrong username or password')
     }
+
     const isMatch = await HashUtils.comparePassword(password, userMatch.hashedPassword)
     if (!isMatch) {
       throw new Error('Wrong username or password')
     }
 
-    const accessToken = Jwt.createAccessToken({ userId: userMatch._id.toString(), email: userMatch.email })
-    const refreshToken = Jwt.createRefreshToken({ userId: userMatch._id.toString(), email: userMatch.email })
+    if (!userMatch.is_verified) {
+      throw new Error('Email not verified')
+    }
+
+    const payload = {
+      userId: userMatch._id.toString(),
+      email: userMatch.email,
+    }
+
+    const accessToken = Jwt.createAccessToken(payload)
+    const refreshToken = Jwt.createRefreshToken(payload)
 
     await refreshtokenRepository.deleteByUserId(userMatch._id)
 
@@ -45,7 +73,11 @@ class AuthService {
     })
 
     return {
-      userMatch,
+      user: {
+        id: userMatch._id,
+        email: userMatch.email,
+        username: userMatch.username,
+      },
       accessToken,
       refreshToken,
     }
@@ -58,10 +90,11 @@ class AuthService {
 
   async refreshToken(token: string) {
     let payload
+
     try {
       payload = Jwt.verifyRefreshToken(token)
     } catch {
-      throw new Error(`Invalid or expired refresh token`)
+      throw new Error('Invalid or expired refresh token')
     }
 
     const session = await refreshtokenRepository.findByToken(token)
@@ -78,7 +111,9 @@ class AuthService {
       throw new Error('token has expired')
     }
 
-    const newAccessToken = Jwt.createAccessToken({ userId: session.userId.toString() })
+    const newAccessToken = Jwt.createAccessToken({
+      userId: session.userId.toString(),
+    })
 
     return {
       accessToken: newAccessToken,

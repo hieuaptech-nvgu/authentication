@@ -30,7 +30,6 @@ class AuthService {
     })
 
     await EmailService.sendVerifyEmail(email, otp)
-    console.log("this is otp", otp)
 
     return {
       id: newUser._id,

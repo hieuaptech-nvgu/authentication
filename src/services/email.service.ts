@@ -5,7 +5,7 @@ import hash from '~/utils/hash.js'
 class EmailService {
   async sendVerifyEmail(email: string, otp: string) {
     await transporter.sendMail({
-      from: '"My App" <no-reply@myapp.com>',
+      from: `"My App" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Verify your email',
       html: `

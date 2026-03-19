@@ -7,6 +7,13 @@ const userSchema = new Schema<IUser>(
     username: { type: String, required: true },
     email: { type: String, required: true, unique: true, index: true },
     hashedPassword: { type: String, required: true },
+    roles: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Role',
+        required: true,
+      },
+    ],
     is_verified: { type: Boolean, default: false },
     email_verify_code: { type: String, default: null },
     email_verify_expires: { type: Date, default: null },

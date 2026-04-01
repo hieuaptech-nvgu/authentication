@@ -4,8 +4,8 @@ import { UserStatus } from '~/types/user.type.js'
 
 const userSchema = new Schema<IUser>(
   {
-    username: { type: String, required: true },
-    email: { type: String, required: true, unique: true, index: true },
+    username: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     hashedPassword: { type: String, required: true },
     roles: [
       {

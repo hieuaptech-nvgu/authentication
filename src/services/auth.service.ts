@@ -1,4 +1,6 @@
 import type { RegisterDTO, LoginDTO } from '../dto/auth.dto.js'
+import "../models/role.model.js"
+import "../models/permission.model.js"
 import userRepository from '~/repositories/user.repository.js'
 import refreshtokenRepository from '~/repositories/refreshtoken.repository.js'
 import HashUtils from '../utils/hash.js'
@@ -41,23 +43,34 @@ class AuthService {
   async login(data: LoginDTO) {
     const { email, password } = data
 
-    const userMatch = await userRepository.findByEmail(email)
+    const userMatch = await userRepository.findByEmail(email).populate<{
+      roles: Array<{
+        permissions: Array<{ slug: string }>
+      }>
+    }>({
+      path: 'roles',
+      populate: { path: 'permissions' },
+    })
+
     if (!userMatch) {
-      throw new Error('Wrong username or password')
+      throw new Error('Invalid email or password')
     }
+
+    const permissions = userMatch.roles?.flatMap((role) => role.permissions.map((p) => p.slug))
 
     const isMatch = await HashUtils.comparePassword(password, userMatch.hashedPassword)
     if (!isMatch) {
-      throw new Error('Wrong username or password')
+      throw new Error('Invalid email or password')
     }
 
     if (!userMatch.is_verified) {
-      throw new Error('Email not verified')
+      throw new Error('Please verify your email')
     }
 
     const payload = {
       userId: userMatch._id.toString(),
       email: userMatch.email,
+      permissions
     }
 
     const accessToken = Jwt.createAccessToken(payload)
@@ -110,8 +123,25 @@ class AuthService {
       throw new Error('token has expired')
     }
 
+    const user = await userRepository.findById(session.userId.toString()).populate<{
+      roles: Array<{
+        permissions: Array<{ slug: string }>
+      }>
+    }>({
+      path: 'roles',
+      populate: { path: 'permissions' },
+    })
+
+    if (!user || !user.is_verified) {
+      throw new Error('User not found or not verified')
+    }
+
+    const permissions = user.roles?.flatMap((role) => role.permissions.map((p) => p.slug)) || []
+
     const newAccessToken = Jwt.createAccessToken({
-      userId: session.userId.toString(),
+      userId: user._id.toString(),
+      email: user.email,
+      permissions: permissions
     })
 
     return {

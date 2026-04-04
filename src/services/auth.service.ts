@@ -8,73 +8,54 @@ import Jwt from '~/utils/jwt.js'
 import { generateOtp } from '~/utils/generateOTP.js'
 import EmailService from './email.service.js'
 import crypto from 'crypto'
-import mongoose from 'mongoose'
 
 class AuthService {
-  // ================= REGISTER =================
   async register(data: RegisterDTO) {
-    const session = await mongoose.startSession()
-    session.startTransaction()
-
     try {
       const { username, email, password } = data
-
       const emailNormalized = email.toLowerCase().trim()
-      const existingUser = await userRepository.findByEmail(emailNormalized)
-      if (existingUser) {
-        throw new Error('Email already exists')
-      }
+
       const otp = generateOtp()
       const hashedOtp = crypto
         .createHash('sha256')
         .update(otp + process.env.OTP_SECRET)
         .digest('hex')
+
       const hashedPassword = await HashUtils.hashPassword(password)
 
-      const newUser = await userRepository.create(
-        {
-          username,
-          email: emailNormalized,
-          hashedPassword,
-          is_verified: false,
-          email_verify_code: hashedOtp,
-          email_verify_expires: new Date(Date.now() + 5 * 60 * 1000),
-        },
-        { session },
-      )
-
-      await session.commitTransaction()
+      const newUser = await userRepository.create({
+        username,
+        email: emailNormalized,
+        hashedPassword,
+        is_verified: false,
+        email_verify_code: hashedOtp,
+        email_verify_expires: new Date(Date.now() + 5 * 60 * 1000),
+      })
 
       try {
         await EmailService.sendVerifyEmail(emailNormalized, otp)
-      } catch (error) {
-        console.error('Send email failed:', error)
+      } catch (err) {
+        console.error('Send email failed:', err)
       }
 
       return newUser
-    } catch (error) {
-      await session.abortTransaction()
-      throw error
-    } finally {
-      session.endSession()
+    } catch (err: any) {
+      if (err.code === 11000) {
+        throw new Error('Email already exists', { cause: err })
+      }
+
+      throw err
     }
   }
 
-  // ================= LOGIN =================
   async login(data: LoginDTO) {
     const { email, password } = data
 
     const emailNormalized = email.toLowerCase().trim()
 
     const userMatch = await userRepository
-      .findByEmail(emailNormalized)
-      .select('+hashedPassword email username roles is_verified failed_attempts locked_until')
-
-      .populate<{
-        roles: Array<{
-          permissions: Array<{ slug: string }>
-        }>
-      }>({
+      .findByEmailWithPassword(emailNormalized)
+      .populate<{ roles: { permissions: { slug: string }[] }[] }>({
         path: 'roles',
         populate: { path: 'permissions' },
       })
@@ -83,14 +64,11 @@ class AuthService {
       throw new Error('Invalid email or password')
     }
 
-    // check lock
     if (userMatch.locked_until && userMatch.locked_until > new Date()) {
       throw new Error('Account is temporarily locked')
     }
 
     const isMatch = await HashUtils.comparePassword(password, userMatch.hashedPassword)
-
-    // sai password
     if (!isMatch) {
       userMatch.failed_attempts += 1
 
@@ -103,22 +81,18 @@ class AuthService {
       throw new Error('Invalid email or password')
     }
 
-    // verify email
     if (!userMatch.is_verified) {
       throw new Error('Please verify your email')
     }
 
-    // success → reset
     userMatch.failed_attempts = 0
     userMatch.locked_until = null
     userMatch.last_login_at = new Date()
 
     await userMatch.save()
 
-    // safe mapping
     const permissions = userMatch.roles?.flatMap((role) => role.permissions?.map((p) => p.slug) || []) || []
 
-    // payload tối ưu (không nhét permissions nếu scale lớn)
     const payload = {
       userId: userMatch._id.toString(),
       email: userMatch.email,
@@ -128,7 +102,6 @@ class AuthService {
     const accessToken = Jwt.createAccessToken(payload)
     const refreshToken = Jwt.createRefreshToken(payload)
 
-    // nên dùng transaction nếu production lớn
     await refreshtokenRepository.deleteByUserId(userMatch._id)
 
     await refreshtokenRepository.create({
@@ -148,13 +121,10 @@ class AuthService {
     }
   }
 
-  // ================= LOGOUT =================
   async logout(refreshToken: string) {
     await refreshtokenRepository.deleteRefreshToken(refreshToken)
     return true
   }
-
-  // ================= REFRESH TOKEN =================
   async refreshToken(token: string) {
     let payload
 
@@ -184,7 +154,6 @@ class AuthService {
       throw new Error('User not found or not verified')
     }
 
-    // rotate refresh token (QUAN TRỌNG)
     await refreshtokenRepository.deleteRefreshToken(token)
 
     const newPayload = {

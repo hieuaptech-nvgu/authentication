@@ -4,14 +4,14 @@ import { UserStatus } from '~/types/user.type.js'
 
 const userSchema = new Schema<IUser>(
   {
-    username: { type: String, required: true, unique: true },
+    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     hashedPassword: { type: String, required: true },
     roles: [
       {
         type: Schema.Types.ObjectId,
         ref: 'Role',
-        required: true,
+        default: [],
       },
     ],
     is_verified: { type: Boolean, default: false },
@@ -33,5 +33,20 @@ const userSchema = new Schema<IUser>(
     },
   },
 )
+
+userSchema.index({ email: 1 }, { unique: true })
+userSchema.index({ username: 1 }, { unique: true })
+
+userSchema.set('toJSON', {
+  transform: (_, ret: Partial<IUser> & { __v?: number }) => {
+    delete ret.hashedPassword
+    delete ret.email_verify_code
+    delete ret.email_verify_expires
+    delete ret.failed_attempts
+    delete ret.locked_until
+    delete ret.__v
+    return ret
+  },
+})
 
 export const UserModel = model<IUser>('User', userSchema)
